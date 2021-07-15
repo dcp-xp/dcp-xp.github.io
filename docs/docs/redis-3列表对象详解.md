@@ -2,27 +2,6 @@
 
 Redis 列表是简单的字符串列表，按照插入顺序进行排序，支持从头部或者尾部添加元素，因此列表对象也经常用作为队列。一个列表键最多可以含 2^32−1 个元素。
 
-## 列表对象编码
-
-Redis 列表对象的在 Redis3.0 之前编码是 ziplist 或者 linekedlist。ziplist 编码的底层结构为压缩列表；linkedlist 编码的底层为双端链表的数据结构。
-现在的 Redis 的编码格式为 quicklist
-如下为 ziplist 编码的列表对象示意图`
-
-如下为 linkedlist 编码的列表对象示意图
-注：链表中的每个节点是一个字符串对象，而不是一个简单的字符串。
-
-Quicklist 结合了 ziplist 和 linkedlist 的机构
-
-## 编码转换
-
-当列表对象可以同时满足以下两个条件时， 列表对象使用 ziplist 编码：
-
-- 列表对象保存的所有字符串元素的长度都小于 64 字节；
-
-- 列表对象保存的元素数量小于 512 个；
-  不能满足这两个条件的列表对象需要使用 linkedlist 编码。
-  注：以上两个条件的上限值是可以修改的， 具体请看配置文件中关于 list-max-ziplist-value 选项和 list-max-ziplist-entries 选项的说明。
-
 ## 压缩列表（ziplist）
 
 压缩列表是 Redis 为了节约内存而开发的, 由一系列特殊编码的连续内存块组成的顺序型数据结构。
@@ -31,13 +10,7 @@ Quicklist 结合了 ziplist 和 linkedlist 的机构
 
 一个压缩列表可以包含任意多个节点(entry), 每个节点可以保存一个字节数组或者一个整数值。如下，展示了压缩列表的各个组成部分。
 
-| **属性** | **类型** | **长度** | **用途**                                                                                                                                                                                          |
-| -------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| zlbytes  | uint32_t | 4 字节   | 记录整个压缩列表占用的内存字节数：在对压缩列表进行内存重分配， 或者计算 zlend 的位置时使用。                                                                                                      |
-| zltail   | uint32_t | 4 字节   | 记录压缩列表表尾节点距离压缩列表的起始地址有多少字节： 通过这个偏移量，程序无须遍历整个压缩列表就可以确定表尾节点的地址。                                                                         |
-| zllen    | uint16_t | 2 字节   | 记录了压缩列表包含的节点数量： 当这个属性的值小于 UINT16_MAX （65535）时， 这个属性的值就是压缩列表包含节点的数量； 当这个值等于 UINT16_MAX 时， 节点的真实数量需要遍历整个压缩列表才能计算得出。 |
-| entryX   | 列表节点 | 不定     | 压缩列表包含的各个节点，节点的长度由节点保存的内容决定。                                                                                                                                          |
-| zlend    | uint8_t  | 1 字节   | 特殊值 0xFF （十进制 255 ），用于标记压缩列表的末端。                                                                                                                                             |
+![ziplist 实现结构](../images/ziplist实现结构.png)
 
 ### 2. 压缩列表节点的构成
 
@@ -45,9 +18,9 @@ Quicklist 结合了 ziplist 和 linkedlist 的机构
 
 > 字节数组长度可以有以下 3 种
 >
-> - 长度小于等于 63（ 26−1）字节的字节数组；
-> - 长度小于等于 16383 （214−1）字节的字节数组；
-> - 长度小于等于 4294967295 （232−1）字节的字节数组；
+> - 长度小于等于 63（ 2^6−1）字节的字节数组；
+> - 长度小于等于 16383 （2^14−1）字节的字节数组；
+> - 长度小于等于 4294967295 （2^32−1）字节的字节数组；
 
 > 整数值则可以有以下 6 种长度
 >
@@ -57,9 +30,10 @@ Quicklist 结合了 ziplist 和 linkedlist 的机构
 > - int16_t 类型整数
 > - int32_t 类型整数
 > - int64_t 类型整数
->   每个压缩列表节点都由 previous_entry_length 、 encoding 、 content 三个部分组成。
 
 ### 3. 连锁更新
+
+![ziplist 连锁更新](../images/ziplist连锁更新.png)
 
 在一个压缩列表中， 有多个连续的、长度介于 250 字节到 253 字节之间的节点 e1 至 eN 。因为 e1 至 eN 的所有节点的长度都小于 254 字节， 所以记录这些节点的长度只需要 1 字节长的 previous_entry_length 属性， 换句话说， e1 至 eN 的所有节点的 previous_entry_length 属性都是 1 字节长的。
 如果我们将一个长度大于等于 254 字节的新节点 new 设置为压缩列表的表头节点， 那么 new 将成为 e1 的前置节点，因为 e1 的 previous_entry_length 属性仅长 1 字节， 它没办法保存新节点 new 的长度， 所以程序将对压缩列表执行空间重分配操作， 并将 e1 节点的 previous_entry_length 属性从原来的 1 字节长扩展为 5 字节长。
@@ -73,7 +47,36 @@ Quicklist 结合了 ziplist 和 linkedlist 的机构
 - 其次， 即使出现连锁更新， 但只要被更新的节点数量不多， 就不会对性能造成任何影响： 比如说， 对三五个节点进行连锁更新是绝对不会影响性能的；
   双端列表（linkedlist）
 
-## QuickList
+## 快表（QuickList）
+
+![quicklist](../images/quicklist.png)
+
+> 既然快表是将链表跟压缩表数组结合起来使用，那么具体怎么用呢，比如我有一个 10 个元素的 list，那具体怎么放，每个 quicklistNode 里放多大的 ziplist，假如每个快表节点的 ziplist 只放一个元素，那么其实这就退化成了一个链表，如果 10 个元素放在一个 quicklistNode 的 ziplist 里，那就退化成了一个 ziplist.
+>
+> ##### redis 的配置参数: list-max-ziplist-size 和 list-compress-depth
+>
+> ###### list-max-ziplist-size
+>
+> - 正数时：对应的就是每个 quicklistNode 的 ziplist 中的元素个数。比如配置了 list-max-ziplist-size = 5，那么我刚才的 10 个元素的 list 就是一个两个 quicklistNode 组成的快表，每个 quicklistNode 中的 ziplist 包含了五个元素
+> - 负数时：它限制了 ziplist 的字节数
+>   - -5: 每个 quicklist 节点上的 ziplist 大小不能超过 64 Kb。（注：1kb => 1024 bytes）
+>   - -4: 每个 quicklist 节点上的 ziplist 大小不能超过 32 Kb。
+>   - -3: 每个 quicklist 节点上的 ziplist 大小不能超过 16 Kb。
+>   - -2: 每个 quicklist 节点上的 ziplist 大小不能超过 8 Kb。（-2 是 Redis 给出的默认值）也就是上面的 quicklist->fill = -2;
+>   - -1: 每个 quicklist 节点上的 ziplist 大小不能超过 4 Kb。
+>
+> ###### list-compress-depth
+>
+> 这个参数是用来配置压缩的。这里考虑到的是一个场景，一般状况下，list 都是两端的访问频率比较高，那么是不是可以对中间的数据进行压缩，那么这个参数就是用来表示
+>
+> - 0，代表不压缩，默认值
+> - 1，两端各一个节点不压缩
+> - 2，两端各两个节点不压缩
+> - ... 依次类推
+>
+> 压缩后的 ziplist 就会变成 quicklistLZF，然后替换 zl 指针，这里使用的是 LZF 压缩算法，压缩后的 quicklistLZF 中的 compressed 也是个柔性数组，压缩后的 ziplist 整个就放进这个柔性数组
+
+### 代码实现
 
 ```c
 /* Node, quicklist, and Iterator are the only data structures used currently. */
@@ -157,12 +160,6 @@ typedef struct quicklist {
 } quicklist;
 ```
 
-![quicklist](../images/quicklist.png)
-
-### ziplist
-
-这里有两个 redis 的配置参数，list-max-ziplist-size 和 list-compress-depth，先来说第一个，既然快表是将链表跟压缩表数组结合起来使用，那么具体怎么用呢，比如我有一个 10 个元素的 list，那具体怎么放，每个 quicklistNode 里放多大的 ziplist，假如每个快表节点的 ziplist 只放一个元素，那么其实这就退化成了一个链表，如果 10 个元素放在一个 quicklistNode 的 ziplist 里，那就退化成了一个 ziplist，所以有了这个 list-max-ziplist-size,而且它还比较牛，能取正负值，当是正值时，对应的就是每个 quicklistNode 的 ziplist 中的元素个数，比如配置了 list-max-ziplist-size = 5，那么我刚才的 10 个元素的 list 就是一个两个 quicklistNode 组成的快表，每个 quicklistNode 中的 ziplist 包含了五个元素，当 list-max-ziplist-size 取负值的时候，它限制了 ziplist 的字节数
-
 ```c
 REDIS_STATIC int _quicklistNodeSizeMeetsOptimizationRequirement(const size_t sz, const int fill) {
     if (fill >= 0)
@@ -197,26 +194,16 @@ quicklist *quicklistCreate(void) {
     return quicklist;
 }
 ```
+## 业务场景应用
 
-这个 fill 就是传进来的 list-max-ziplist-size, 具体对应的就是
+#### 消息队列
+Redis的lpush + brpop命令组合即可实现阻塞队列，生产者客户端使用lpush从列表左侧插入元素，多个消费者客户端使用brpop命令阻塞式的争抢列表尾部的元素，多个客户端保证了消费的负载均衡和高可用。
 
-- -5: 每个 quicklist 节点上的 ziplist 大小不能超过 64 Kb。（注：1kb => 1024 bytes）
-- -4: 每个 quicklist 节点上的 ziplist 大小不能超过 32 Kb。
-- -3: 每个 quicklist 节点上的 ziplist 大小不能超过 16 Kb。
-- -2: 每个 quicklist 节点上的 ziplist 大小不能超过 8 Kb。（-2 是 Redis 给出的默认值）也就是上面的 quicklist->fill = -2;
-- -1: 每个 quicklist 节点上的 ziplist 大小不能超过 4 Kb。
+![list消息队列](../images/list消息队列.png)
 
-### 压缩
+#### 最新列表(无分页、更新不频繁)
+list类型的lpush命令和lrange命令能实现最新列表的功能，每次通过lpush命令往列表里插入新的元素，然后通过lrange命令读取最新的元素列表，如朋友圈的点赞列表、评论列表。
+> 对于频繁更新的列表，list类型的分页可能导致列表元素重复或漏掉，举个例子，当前列表里由表头到表尾依次有（E，D，C，B，A）五个元素，每页获取3个元素，用户第一次获取到（E，D，C）三个元素，然后表头新增了一个元素F，列表变成了（F，E，D，C，B，A），此时用户取第二页拿到（C，B，A），元素C重复了。只有不需要分页（比如每次都只取列表的前5个元素）或者更新频率低（比如每天凌晨更新一次）的列表才适合用list类型实现。
 
-list-compress-depth 这个参数是用来配置压缩的。这里考虑到的是一个场景，一般状况下，list 都是两端的访问频率比较高，那么是不是可以对中间的数据进行压缩，那么这个参数就是用来表示
-
-```
-/* depth of end nodes not to compress;0=off */
-```
-
-- 0，代表不压缩，默认值
-- 1，两端各一个节点不压缩
-- 2，两端各两个节点不压缩
-- ... 依次类推
-
-压缩后的 ziplist 就会变成 quicklistLZF，然后替换 zl 指针，这里使用的是 LZF 压缩算法，压缩后的 quicklistLZF 中的 compressed 也是个柔性数组，压缩后的 ziplist 整个就放进这个柔性数组
+#### 排行榜（定时计算）
+list类型的lrange命令可以分页查看队列中的数据。可将每隔一段时间计算一次的排行榜存储在list类型中，如京东每日的手机销量排行、学校每次月考学生的成绩排名、斗鱼年终盛典主播排名等，下图是酷狗音乐“K歌擂台赛”的昨日打擂金曲排行榜，每日计算一次，存储在list类型中，接口访问时，通过page和size分页获取打擂金曲。
