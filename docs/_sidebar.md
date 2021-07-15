@@ -4,6 +4,7 @@
   * [Redis 字符串对象](./docs/redis-2字符串详解.md)
   * [Redis 列表对象](./docs/redis-3列表对象详解.md)
   * [Redis 哈希对象](./docs/redis-4哈希对象详解.md)
+  * [Redis 集合对象](./docs/redis-5集合对象详解.md)
 
   
 
