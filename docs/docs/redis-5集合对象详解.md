@@ -80,7 +80,7 @@ typedef struct zset {
 
 跳跃表（skiplist）是一种有序数据结构，它通过在每个节点中维持多个指向其它节点的指针，从而达到快速访问节点的目的。
 
-![skiplist](..images/skiplist.png)
+![skiplist](../images/skiplist.png)
 
 - 性质
 
