@@ -3,6 +3,7 @@
   * [Redis 对象与编码](./docs/redis-1对象与编码.md)
   * [Redis 字符串对象](./docs/redis-2字符串详解.md)
   * [Redis 列表对象](./docs/redis-3列表对象详解.md)
+  * [Redis 哈希对象](./docs/redis-3哈希对象详解.md)
 
   
 
