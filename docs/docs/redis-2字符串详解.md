@@ -80,16 +80,28 @@ sds sdsempty(void) {
 ## 位图（bitmap） value 非0即1
 
 - 有用户系统，统计用户登录天数且窗口随机
-setbit sean 1 1
-setbit sean 7 1
-setbit sean 364 1
-strlen sean
-bitcount sean -2 -1
+
+![统计用户登陆天数](../images/统计用户登陆天数.png)
+
+```Shell
+setbit zhangsan 1 1
+setbit zhangsan 7 1
+setbit zhangsan 364 1
+strlen zhangsan
+bitcount zhangsan 0 -1
+```
+
+> 一年10亿内存占用: 1,000,000,000 * (365 / 8) 约等于 46GB
 
 - 618做活动：送礼物大库备货多少礼物，假设有2亿用户(僵尸用户/冷热用户/活跃用户)。统计活跃用户统计且窗口随机。 比如说 1号~3号连续登录要去重
-setbit 20190101  1  1
-setbit 20190102  1  1
-setbit 20190102  7  1
-bitop or destkey 20190101  20190102
-bitcount  destkey  0 -1 
+![统计活跃用户](../images/统计活跃用户.png)
+
+```Shell
+setbit 20210617  1  1
+setbit 20210618  1  1
+setbit 20210619  7  1
+bitop or destkey 20210617  20210618
+bitcount destkey  0 -1 
+```
+> 一年10亿内存占用: 365 * (1,000,000,000 / 8) 约等于 46GB
 
